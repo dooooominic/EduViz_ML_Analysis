@@ -9,7 +9,11 @@ from sklearn.metrics import (
 )
 from sklearn.ensemble import IsolationForest
 import lime, shap
+from lime import lime_tabular
+from lime.lime_tabular import LimeTabularExplainer
 import warnings
+import seaborn as sns
+import plotly.express as px
 warnings.filterwarnings('ignore')
 
 
@@ -117,14 +121,12 @@ if tab_choice == "Overview & Model Comparison":
     
     # Heatmap comparison
     st.subheader("Metric Heatmap: Regression Models")
-    fig, ax = plt.subplots(figsize=(2, 1))
-    sns.heatmap(reg_df, annot=True, fmt=".3f", cmap="RdYlGn", ax=ax, cbar_kws={"label": "Score"})
-    st.pyplot(fig)
+    fig = px.imshow(reg_df, labels=dict(color="Score"), color_continuous_scale="RdYlGn", aspect="auto", text_auto=".3f")
+    st.plotly_chart(fig, use_container_width=True)
     
     st.subheader("Metric Heatmap: Classification Models")
-    fig, ax = plt.subplots(figsize=(5, 2))
-    sns.heatmap(clf_df, annot=True, fmt=".3f", cmap="RdYlGn", ax=ax, cbar_kws={"label": "Score"})
-    st.pyplot(fig)
+    fig = px.imshow(clf_df, labels=dict(color="Score"), color_continuous_scale="RdYlGn", aspect="auto", text_auto=".3f")
+    st.plotly_chart(fig, use_container_width=True)
     
     # Insights
     st.subheader("Key Insights")
@@ -161,27 +163,20 @@ elif tab_choice == "Regression Deep-Dive":
     
     with col1:
         st.subheader("Predicted vs Actual")
-        fig, ax = plt.subplots(figsize=(3, 3))
-        ax.scatter(y_true, y_pred, alpha=0.5, s=20)
-        lims = [min(y_true.min(), y_pred.min()), max(y_true.max(), y_pred.max())]
-        ax.plot(lims, lims, "r--", label="Perfect Prediction")
-        ax.set_xlabel("Actual STAAR %")
-        ax.set_ylabel("Predicted STAAR %")
-        ax.set_title(f"{selected_reg_model_label}")
-        ax.legend()
-        st.pyplot(fig)
+        scatter_fig = px.scatter(pd.DataFrame({"Actual": y_true, "Predicted": y_pred}), 
+                                 x="Actual", y="Predicted", opacity=0.6, trendline="ols")
+        scatter_fig.add_shape(type="line", x0=y_true.min(), y0=y_true.min(), 
+                             x1=y_true.max(), y1=y_true.max(), line=dict(color="red", dash="dash"))
+        scatter_fig.update_layout(height=300, width=400)
+        st.plotly_chart(scatter_fig, use_container_width=True)
     
     with col2:
         st.subheader("Residual Distribution")
         residuals = y_pred - y_true
-        fig, ax = plt.subplots(figsize=(3, 3))
-        ax.hist(residuals, bins=30, edgecolor='black', alpha=0.7)
-        ax.axvline(0, color='r', linestyle='--', linewidth=2, label='Zero Error')
-        ax.set_xlabel("Residual (Predicted - Actual)")
-        ax.set_ylabel("Frequency")
-        ax.set_title("Residual Distribution")
-        ax.legend()
-        st.pyplot(fig)
+        hist_fig = px.histogram(residuals, nbins=30, labels={"value": "Residual", "count": "Frequency"})
+        hist_fig.add_vline(x=0, line_dash="dash", line_color="red", annotation_text="Zero Error")
+        hist_fig.update_layout(height=300, width=400)
+        st.plotly_chart(hist_fig, use_container_width=True)
     
     st.write(f"**Mean Residual:** {residuals.mean():.2f} {'(underprediction)' if residuals.mean() < 0 else '(overprediction)'}")
     
@@ -197,12 +192,10 @@ elif tab_choice == "Regression Deep-Dive":
         })
     ).sort_values("Mean Residual")
     
-    fig, ax = plt.subplots(figsize=(5, 2.5))
-    residuals_by_group["Mean Residual"].plot(kind="barh", ax=ax, color=plt.cm.RdYlGn((residuals_by_group["Mean Residual"] + 10) / 20))
-    ax.axvline(0, color='k', linestyle='--', linewidth=1)
-    ax.set_xlabel("Mean Residual")
-    ax.set_title(f"Mean Prediction Error by {group_col}")
-    st.pyplot(fig)
+    bar_fig = px.bar(residuals_by_group.reset_index(), x="Mean Residual", y=group_col, 
+                     orientation="h", color="Mean Residual", color_continuous_scale="RdYlGn")
+    bar_fig.update_layout(height=400, coloraxis_colorbar=dict(thickness=20))
+    st.plotly_chart(bar_fig, use_container_width=True)
     
     st.dataframe(residuals_by_group)
 
@@ -250,43 +243,41 @@ elif tab_choice == "Classification Deep-Dive":
     with col1:
         st.subheader("Confusion Matrix")
         cm = confusion_matrix(y_true, y_pred)
-        fig, ax = plt.subplots(figsize=(3, 3))
-        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax, cbar=False,
-                    xticklabels=["Fail", "Pass"], yticklabels=["Fail", "Pass"])
-        ax.set_ylabel("Actual")
-        ax.set_xlabel("Predicted")
-        st.pyplot(fig)
+        cm_df = pd.DataFrame(cm, index=["Fail", "Pass"], columns=["Fail", "Pass"])
+        heatmap_fig = px.imshow(cm_df, labels=dict(color="Count"), text_auto=True, color_continuous_scale="Blues", aspect="auto")
+        heatmap_fig.update_layout(height=300, width=300)
+        st.plotly_chart(heatmap_fig, use_container_width=True)
     
     with col2:
         st.subheader("Prediction Distribution")
         if is_prob:
-            fig, ax = plt.subplots(figsize=(3, 2.5))
-            ax.hist(y_prob_or_pred[y_true == 0], bins=30, alpha=0.6, label="Actual Fail", color='red')
-            ax.hist(y_prob_or_pred[y_true == 1], bins=30, alpha=0.6, label="Actual Pass", color='green')
-            ax.axvline(0.5, color='k', linestyle='--', linewidth=2, label='Decision Threshold')
-            ax.set_xlabel("Predicted Probability")
-            ax.set_ylabel("Count")
-            ax.legend()
-            st.pyplot(fig)
+            dist_data = pd.DataFrame({
+                "Probability": list(y_prob_or_pred[y_true == 0]) + list(y_prob_or_pred[y_true == 1]),
+                "Actual": ["Fail"]*len(y_prob_or_pred[y_true == 0]) + ["Pass"]*len(y_prob_or_pred[y_true == 1])
+            })
+            hist_fig = px.histogram(dist_data, x="Probability", color="Actual", nbins=30, barmode="overlay")
+            hist_fig.add_vline(x=0.5, line_dash="dash", line_color="black", annotation_text="Decision Threshold")
+            hist_fig.update_layout(height=300, width=300)
+            st.plotly_chart(hist_fig, use_container_width=True)
         else:
             counts = pd.Series(y_pred).value_counts()
-            fig, ax = plt.subplots(figsize=(3, 3))
-            ax.bar(["Fail", "Pass"], [counts.get(0, 0), counts.get(1, 0)], color=['red', 'green'])
-            ax.set_ylabel("Count")
-            st.pyplot(fig)
+            bar_data = pd.DataFrame({"Label": ["Fail", "Pass"], "Count": [counts.get(0, 0), counts.get(1, 0)]})
+            bar_fig = px.bar(bar_data, x="Label", y="Count", color="Label", color_discrete_map={"Fail": "red", "Pass": "green"})
+            bar_fig.update_layout(height=300, width=300)
+            st.plotly_chart(bar_fig, use_container_width=True)
     
     # ROC curve (if probability)
     if is_prob:
         st.subheader("ROC Curve")
         fpr, tpr, thresholds = roc_curve(y_true, y_prob_or_pred)
-        fig, ax = plt.subplots(figsize=(3, 3))
-        ax.plot(fpr, tpr, linewidth=2, label=f"ROC (AUC={auc:.3f})")
-        ax.plot([0, 1], [0, 1], "k--", linewidth=1, label="Random Classifier")
-        ax.set_xlabel("False Positive Rate")
-        ax.set_ylabel("True Positive Rate")
-        ax.set_title("ROC Curve")
-        ax.legend()
-        st.pyplot(fig)
+        auc_score = roc_auc_score(y_true, y_prob_or_pred)
+        roc_data = pd.DataFrame({"FPR": fpr, "TPR": tpr})
+        roc_fig = px.line(roc_data, x="FPR", y="TPR", 
+                         labels={"FPR": "False Positive Rate", "TPR": "True Positive Rate"},
+                         title=f"ROC Curve (AUC={auc_score:.3f})")
+        roc_fig.add_shape(type="line", x0=0, y0=0, x1=1, y1=1, line=dict(color="gray", dash="dash"))
+        roc_fig.update_layout(height=350, width=350)
+        st.plotly_chart(roc_fig, use_container_width=True)
     
     # Error by group
     st.subheader("Classification Performance by Group")
@@ -299,11 +290,11 @@ elif tab_choice == "Classification Deep-Dive":
         })
     ).sort_values("Accuracy")
     
-    fig, ax = plt.subplots(figsize=(5, 2.5))
-    perf_by_group["Accuracy"].plot(kind="barh", ax=ax, color=plt.cm.RdYlGn(perf_by_group["Accuracy"]))
-    ax.set_xlabel("Accuracy")
-    ax.set_title(f"Accuracy by {group_col}")
-    st.pyplot(fig)
+    perf_fig = px.bar(perf_by_group.reset_index(), x="Accuracy", y=group_col, 
+                     orientation="h", color="Accuracy", color_continuous_scale="RdYlGn",
+                     range_x=[0, 1])
+    perf_fig.update_layout(height=400, coloraxis_colorbar=dict(thickness=20))
+    st.plotly_chart(perf_fig, use_container_width=True)
     
     st.dataframe(perf_by_group)
 
@@ -340,13 +331,12 @@ elif tab_choice == "Trend Analysis":
     
     # Scatter: GAM vs GBR
     st.subheader("Regression Model Predictions")
-    fig, ax = plt.subplots(figsize=(3, 3))
-    ax.scatter(gam_pred, gbr_pred, alpha=0.5, s=20)
-    ax.plot([gam_pred.min(), gam_pred.max()], [gam_pred.min(), gam_pred.max()], "r--")
-    ax.set_xlabel("GAM Prediction")
-    ax.set_ylabel("GBR Prediction")
-    ax.set_title("Regression Model Predictions Comparison")
-    st.pyplot(fig)
+    scatter_data = pd.DataFrame({"GAM": gam_pred, "GBR": gbr_pred})
+    scatter_fig = px.scatter(scatter_data, x="GAM", y="GBR", opacity=0.6, trendline="ols")
+    scatter_fig.add_shape(type="line", x0=gam_pred.min(), y0=gam_pred.min(), 
+                         x1=gam_pred.max(), y1=gam_pred.max(), line=dict(color="red", dash="dash"))
+    scatter_fig.update_layout(height=400, width=500)
+    st.plotly_chart(scatter_fig, use_container_width=True)
     
     # Classification agreement heatmap
     st.subheader("Classification Model Agreement Matrix")
@@ -357,10 +347,10 @@ elif tab_choice == "Trend Analysis":
         for name in clf_models.keys()
     })
     
-    fig, ax = plt.subplots(figsize=(6, 6))
-    sns.heatmap(agreement_matrix, annot=True, fmt=".1f", cmap="RdYlGn", ax=ax, vmin=0, vmax=100)
-    ax.set_title("Classification Model Agreement (% same prediction)")
-    st.pyplot(fig)
+    agree_fig = px.imshow(agreement_matrix, labels=dict(color="%"), color_continuous_scale="RdYlGn", 
+                         text_auto=".1f", aspect="auto", color_continuous_midpoint=50)
+    agree_fig.update_layout(height=350, width=350)
+    st.plotly_chart(agree_fig, use_container_width=True)
     
     # Regression residuals by grade
     st.subheader("Residual Trends by Grade & Model")
@@ -379,34 +369,21 @@ elif tab_choice == "Trend Analysis":
     
     residuals_df = pd.DataFrame(grade_residuals)
     
-    fig, ax = plt.subplots(figsize=(5, 2.5))
-    for model in residuals_df["Model"].unique():
-        data = residuals_df[residuals_df["Model"] == model]
-        ax.plot(data["Grade"], data["Mean Residual"], marker="o", label=model)
-    ax.axhline(0, color='k', linestyle='--', linewidth=1)
-    ax.set_xlabel("Tested Grade")
-    ax.set_ylabel("Mean Residual")
-    ax.set_title("Residual Trends by Grade")
-    ax.legend()
-    ax.grid(alpha=0.3)
-    st.pyplot(fig)
+    line_fig = px.line(residuals_df, x="Grade", y="Mean Residual", color="Model", markers=True)
+    line_fig.add_hline(y=0, line_dash="dash", line_color="black")
+    line_fig.update_layout(height=350, hovermode="x unified")
+    st.plotly_chart(line_fig, use_container_width=True)
     
     # Scatter: True vs predictions for both regression models
     st.subheader("Prediction Landscape: True vs Both Regression Models")
-    fig, axes = plt.subplots(1, 2, figsize=(6, 2.5))
-    
-    for idx, (label, col) in enumerate(REGRESSION_MODELS.items()):
-        ax = axes[idx]
-        ax.scatter(filtered_df["y_true_cont"], filtered_df[col], alpha=0.5, s=20)
-        lims = [min(filtered_df["y_true_cont"].min(), filtered_df[col].min()),
-                max(filtered_df["y_true_cont"].max(), filtered_df[col].max())]
-        ax.plot(lims, lims, "r--")
-        ax.set_xlabel("Actual Score")
-        ax.set_ylabel("Predicted Score")
-        ax.set_title(label)
-    
-    plt.tight_layout()
-    st.pyplot(fig)
+    pred_data = pd.DataFrame({
+        "True": list(filtered_df["y_true_cont"]) * 2,
+        "Predicted": list(filtered_df["gam_pred"]) + list(filtered_df["gbr_pred"]),
+        "Model": ["GAM"]*len(filtered_df) + ["GBR"]*len(filtered_df)
+    })
+    pred_fig = px.scatter(pred_data, x="True", y="Predicted", color="Model", opacity=0.6, trendline="ols")
+    pred_fig.update_layout(height=400, hovermode="closest")
+    st.plotly_chart(pred_fig, use_container_width=True)
     
     # District-level performance heatmap
     st.subheader("Top/Bottom Districts by Residual")
@@ -465,14 +442,23 @@ elif tab_choice == "Explainability (SHAP/LIME)":
             # Feature importance based on coefficients
             feature_importance = pd.DataFrame({
                 "Feature": feature_cols,
-                "Importance": np.abs(model.coef_),
+                "Importance": np.abs(model.coef_), #THIS IS WRONG
+                #edit this with lime for entire model (precompute?)
+
+
+            #precompute a lime score csv file perhaps?
+            #also do a comparison view for all the models, show top 5 explanations side by side. most important features
+            #and feature values. make sure take absolute value. Do good color here
+
+
+
+
             }).sort_values("Importance", ascending=False)
             
-            fig, ax = plt.subplots(figsize=(10, 6))
-            ax.barh(feature_importance["Feature"], feature_importance["Importance"], color='steelblue')
-            ax.set_xlabel("Absolute Coefficient Value")
-            ax.set_title(f"Feature Importance: {selected_reg_model_label}")
-            st.pyplot(fig)
+            fig_imp = px.bar(feature_importance.head(10), x="Importance", y="Feature", orientation="h", color="Importance", 
+                            color_continuous_scale="Blues")
+            fig_imp.update_layout(height=400, showlegend=False)
+            st.plotly_chart(fig_imp, use_container_width=True)
             
             st.dataframe(feature_importance)
             
@@ -482,8 +468,8 @@ elif tab_choice == "Explainability (SHAP/LIME)":
             instance_idx = st.slider("Select instance (row) to explain", 0, len(filtered_df) - 1, 0)
             
             try:
-                import lime.tabular
-                explainer = lime.tabular.LimeTabularExplainer(
+                import lime.lime_tabular
+                explainer = lime_tabular.LimeTabularExplainer(
                     X.values,
                     feature_names=feature_cols,
                     class_names=["Score"],
@@ -511,12 +497,11 @@ elif tab_choice == "Explainability (SHAP/LIME)":
                 
                 with col2:
                     st.write("**Top Features Contributing to Prediction**")
-                    fig, ax = plt.subplots(figsize=(4, 2.5))
-                    colors = ['green' if w > 0 else 'red' for w in lime_df["Weight"]]
-                    ax.barh(lime_df["Feature"], lime_df["Weight"], color=colors, alpha=0.7)
-                    ax.set_xlabel("Contribution")
-                    ax.set_title(f"LIME Explanation (Instance {instance_idx})")
-                    st.pyplot(fig)
+                    lime_df_plot = lime_df.head(10)
+                    lime_fig = px.bar(lime_df_plot, x="Weight", y="Feature", orientation="h", 
+                                    color="Weight", color_continuous_scale="RdBu", color_continuous_midpoint=0)
+                    lime_fig.update_layout(height=300, showlegend=False)
+                    st.plotly_chart(lime_fig, use_container_width=True)
             except Exception as e:
                 st.error(f"Error generating LIME explanation: {str(e)}")
     
@@ -549,11 +534,10 @@ elif tab_choice == "Explainability (SHAP/LIME)":
                 "Importance": np.abs(clf.coef_[0]),
             }).sort_values("Importance", ascending=False)
             
-            fig, ax = plt.subplots(figsize=(5, 3))
-            ax.barh(feature_importance["Feature"], feature_importance["Importance"], color='coral')
-            ax.set_xlabel("Absolute Coefficient Value")
-            ax.set_title(f"Feature Importance: {selected_clf_model_label}")
-            st.pyplot(fig)
+            clf_fig_imp = px.bar(feature_importance.head(10), x="Importance", y="Feature", orientation="h", color="Importance",
+                                color_continuous_scale="Oranges")
+            clf_fig_imp.update_layout(height=400, showlegend=False)
+            st.plotly_chart(clf_fig_imp, use_container_width=True)
             
             st.dataframe(feature_importance)
             
@@ -563,8 +547,8 @@ elif tab_choice == "Explainability (SHAP/LIME)":
             instance_idx = st.slider("Select instance (row) to explain", 0, len(filtered_df) - 1, 0, key="clf_instance")
             
             try:
-                import lime.tabular
-                explainer = lime.tabular.LimeTabularExplainer(
+                import lime.lime_tabular
+                explainer = lime_tabular.LimeTabularExplainer(
                     X.values,
                     feature_names=feature_cols,
                     class_names=["Fail", "Pass"],
@@ -651,18 +635,15 @@ elif tab_choice == "Anomaly Detection":
     
     # Visualize anomaly scores
     st.subheader("Anomaly Score Distribution")
-    fig, ax = plt.subplots(figsize=(5, 2.5))
-    normal_scores = anomaly_probs[anomaly_scores == 1]
-    anomaly_scores_arr = anomaly_probs[anomaly_scores == -1]
+    anom_data = pd.DataFrame({
+        "Score": anomaly_probs,
+        "Type": ["Normal" if s == 1 else "Anomaly" for s in anomaly_scores]
+    })
     
-    ax.hist(normal_scores, bins=30, alpha=0.6, label="Normal", color='blue')
-    if len(anomaly_scores_arr) > 0:
-        ax.hist(anomaly_scores_arr, bins=20, alpha=0.6, label="Anomaly", color='red')
-    ax.set_xlabel("Anomaly Score")
-    ax.set_ylabel("Frequency")
-    ax.set_title("Distribution of Anomaly Scores")
-    ax.legend()
-    st.pyplot(fig)
+    anom_fig = px.histogram(anom_data, x="Score", color="Type", nbins=30, barmode="overlay",
+                           color_discrete_map={"Normal": "blue", "Anomaly": "red"})
+    anom_fig.update_layout(height=350, hovermode="x unified")
+    st.plotly_chart(anom_fig, use_container_width=True)
     
     # Show anomalies
     st.subheader("Detected Anomalies")
@@ -689,12 +670,10 @@ elif tab_choice == "Anomaly Detection":
     district_anomalies["anomaly_pct"] = (district_anomalies["anomaly_count"] / district_anomalies["total"] * 100).round(1)
     district_anomalies = district_anomalies.sort_values("anomaly_count", ascending=False)
     
-    fig, ax = plt.subplots(figsize=(5, 3))
-    top_districts = district_anomalies.head(15)
-    ax.barh(top_districts.index, top_districts["anomaly_count"], color='crimson', alpha=0.7)
-    ax.set_xlabel("Number of Anomalies")
-    ax.set_title("Top 15 Districts with Most Anomalies")
-    st.pyplot(fig)
+    dist_fig = px.bar(district_anomalies.head(15).reset_index(), x="anomaly_count", y="District", orientation="h",
+                     color="anomaly_count", color_continuous_scale="Reds")
+    dist_fig.update_layout(height=400, xaxis_title="Number of Anomalies", showlegend=False)
+    st.plotly_chart(dist_fig, use_container_width=True)
     
     st.dataframe(district_anomalies.head(20))
     
@@ -708,12 +687,10 @@ elif tab_choice == "Anomaly Detection":
     grade_anomalies["total"] = filtered_df_with_anomalies.groupby("Tested Grade").size()
     grade_anomalies["anomaly_pct"] = (grade_anomalies["anomaly_count"] / grade_anomalies["total"] * 100).round(1)
     
-    fig, ax = plt.subplots(figsize=(4, 2))
-    ax.bar(grade_anomalies.index, grade_anomalies["anomaly_count"], color='orange', alpha=0.7)
-    ax.set_xlabel("Tested Grade")
-    ax.set_ylabel("Number of Anomalies")
-    ax.set_title("Anomalies by Grade")
-    st.pyplot(fig)
+    grade_fig = px.bar(grade_anomalies.reset_index(), x="Tested Grade", y="anomaly_count", color="anomaly_count",
+                      color_continuous_scale="Oranges", labels={"anomaly_count": "Number of Anomalies"})
+    grade_fig.update_layout(height=350, showlegend=False)
+    st.plotly_chart(grade_fig, use_container_width=True)
     
     st.dataframe(grade_anomalies)
     
@@ -734,11 +711,10 @@ elif tab_choice == "Anomaly Detection":
         feature_stats["Deviation"] = np.abs(feature_stats["Anomaly_Mean"] - feature_stats["Normal_Mean"]) / (feature_stats["Normal_Std"] + 1e-6)
         feature_stats = feature_stats.sort_values("Deviation", ascending=False)
         
-        fig, ax = plt.subplots(figsize=(5, 2.5))
-        ax.barh(feature_stats.index, feature_stats["Deviation"], color='purple', alpha=0.7)
-        ax.set_xlabel("Std Dev from Normal")
-        ax.set_title("Features Most Deviated in Anomalies")
-        st.pyplot(fig)
+        feat_fig = px.bar(feature_stats.head(10).reset_index(), x="Deviation", y="index", orientation="h",
+                         color="Deviation", color_continuous_scale="Purples", labels={"index": "Feature"})
+        feat_fig.update_layout(height=400, showlegend=False)
+        st.plotly_chart(feat_fig, use_container_width=True)
         
         st.dataframe(feature_stats)
 elif tab_choice == "Testing Tab":
