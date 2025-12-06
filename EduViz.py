@@ -31,6 +31,40 @@ Compare multiple models across **regression** (continuous score prediction) and 
 def load_eval_data():
     return pd.read_csv("data/model_eval_2025.csv")
 
+@st.cache_data
+def load_lime_importances(path: str = "data/lime_importance_scores.csv"):
+    """Load precomputed LIME importance scores and normalize types.
+
+    Expects CSV with columns: `instance_idx, model, feature, importance`.
+    Returns DataFrame with a numeric `importance` column and an additional
+    `importance_abs` column for aggregation.
+    """
+    try:
+        df = pd.read_csv(path)
+    except FileNotFoundError:
+        return pd.DataFrame(columns=["instance_idx", "model", "feature", "importance"])
+    if "importance" not in df.columns:
+        return pd.DataFrame(columns=["instance_idx", "model", "feature", "importance"])
+    df["importance"] = pd.to_numeric(df["importance"], errors="coerce").fillna(0.0)
+    df["importance_abs"] = df["importance"].abs()
+    return df
+
+
+@st.cache_data
+def load_lime_top5(path: str = "data/lime_top5_per_model.csv"):
+    """Load precomputed top-5 LIME features per model.
+
+    Expects CSV with columns: `model, feature, importance`.
+    """
+    try:
+        df = pd.read_csv(path)
+    except FileNotFoundError:
+        return pd.DataFrame(columns=["model", "feature", "importance"])
+    if "importance" not in df.columns:
+        return pd.DataFrame(columns=["model", "feature", "importance"])
+    df["importance"] = pd.to_numeric(df["importance"], errors="coerce").fillna(0.0)
+    return df
+
 eval_df = load_eval_data()
 
 # ============= Model Definitions =============
@@ -433,77 +467,33 @@ elif tab_choice == "Explainability (SHAP/LIME)":
             X = filtered_df[feature_cols].fillna(0)
             y = filtered_df[selected_reg_model_col]
             
-            st.subheader("Feature Importance Overview")
-            
-            # Create simple model approximation for explanation
-            model = LinearRegression()
-            model.fit(X, y)
-            
-            # Feature importance based on coefficients
-            feature_importance = pd.DataFrame({
-                "Feature": feature_cols,
-                "Importance": np.abs(model.coef_), #THIS IS WRONG
-                #edit this with lime for entire model (precompute?)
+            st.subheader("Feature Importance Overview (Precomputed Top-5 LIME)")
+            top5_df = load_lime_top5()
 
-
-            #precompute a lime score csv file perhaps?
-            #also do a comparison view for all the models, show top 5 explanations side by side. most important features
-            #and feature values. make sure take absolute value. Do good color here
-
-
-
-
-            }).sort_values("Importance", ascending=False)
-            
-            fig_imp = px.bar(feature_importance.head(10), x="Importance", y="Feature", orientation="h", color="Importance", 
-                            color_continuous_scale="Blues")
-            fig_imp.update_layout(height=400, showlegend=False)
-            st.plotly_chart(fig_imp, use_container_width=True)
-            
-            st.dataframe(feature_importance)
-            
-            # LIME for instance-level explanation
-            st.subheader("Instance-Level Explanation (LIME)")
-            
-            instance_idx = st.slider("Select instance (row) to explain", 0, len(filtered_df) - 1, 0)
-            
-            try:
-                import lime.lime_tabular
-                explainer = lime_tabular.LimeTabularExplainer(
-                    X.values,
-                    feature_names=feature_cols,
-                    class_names=["Score"],
-                    mode="regression",
-                    random_state=42
+            if top5_df.empty:
+                st.warning("No precomputed top-5 LIME file found at `data/lime_top5_per_model.csv`. Run `compute_lime_top5.py`.")
+            else:
+                # Show model comparison by sum of top-5 importances
+                model_comp = (
+                    top5_df.groupby("model", as_index=False)["importance"].sum().sort_values("importance", ascending=False)
                 )
-                
-                exp = explainer.explain_instance(X.iloc[instance_idx].values, model.predict, num_features=10)
-                
-                # Extract LIME explanation
-                lime_exp_data = []
-                for feature, weight in exp.as_list():
-                    lime_exp_data.append({"Feature": feature, "Weight": weight})
-                
-                lime_df = pd.DataFrame(lime_exp_data)
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.write(f"**Instance #{instance_idx}**")
-                    st.write(f"- District: {filtered_df.iloc[instance_idx]['District']}")
-                    st.write(f"- Grade: {filtered_df.iloc[instance_idx]['Tested Grade']}")
-                    st.write(f"- Actual: {filtered_df.iloc[instance_idx]['y_true_cont']:.1f}")
-                    st.write(f"- Predicted: {filtered_df.iloc[instance_idx][selected_reg_model_col]:.1f}")
-                
-                with col2:
-                    st.write("**Top Features Contributing to Prediction**")
-                    lime_df_plot = lime_df.head(10)
-                    lime_fig = px.bar(lime_df_plot, x="Weight", y="Feature", orientation="h", 
-                                    color="Weight", color_continuous_scale="RdBu", color_continuous_midpoint=0)
-                    lime_fig.update_layout(height=300, showlegend=False)
-                    st.plotly_chart(lime_fig, use_container_width=True)
-            except Exception as e:
-                st.error(f"Error generating LIME explanation: {str(e)}")
+                fig_model_comp = px.bar(model_comp, x="model", y="importance", color="model")
+                fig_model_comp.update_layout(showlegend=False, height=300, xaxis_title="Model", yaxis_title="Sum of Top-5 Importances")
+                st.plotly_chart(fig_model_comp, use_container_width=True)
+
+                st.write("**Top 5 Features Per Model**")
+                models = top5_df["model"].unique().tolist()
+                cols = st.columns(len(models))
+                for i, m in enumerate(models):
+                    with cols[i]:
+                        st.markdown(f"**{m}**")
+                        top5 = top5_df[top5_df["model"] == m].sort_values("importance", ascending=True)
+                        bar = px.bar(top5, x="importance", y="feature", orientation="h", color="importance", color_continuous_scale="Viridis")
+                        bar.update_layout(height=230, showlegend=False, margin=dict(l=10, r=10, t=20, b=10))
+                        st.plotly_chart(bar, use_container_width=True)
+
+                st.write("**Full Top-5 Table**")
+                st.dataframe(top5_df.sort_values(["model", "importance"], ascending=[True, False]))
     
     else:  # Classification
         clf_model_options = {**CLASSIFICATION_MODELS, **PROB_MODELS}
@@ -522,75 +512,32 @@ elif tab_choice == "Explainability (SHAP/LIME)":
             X = filtered_df[feature_cols].fillna(0)
             y = filtered_df["y_true_binary"]
             
-            st.subheader("Feature Importance Overview")
-            
-            # Train a simple classifier for explanation
-            clf = LogisticRegression(max_iter=1000)
-            clf.fit(X, y)
-            
-            # Feature importance
-            feature_importance = pd.DataFrame({
-                "Feature": feature_cols,
-                "Importance": np.abs(clf.coef_[0]),
-            }).sort_values("Importance", ascending=False)
-            
-            clf_fig_imp = px.bar(feature_importance.head(10), x="Importance", y="Feature", orientation="h", color="Importance",
-                                color_continuous_scale="Oranges")
-            clf_fig_imp.update_layout(height=400, showlegend=False)
-            st.plotly_chart(clf_fig_imp, use_container_width=True)
-            
-            st.dataframe(feature_importance)
-            
-            # LIME for instance-level
-            st.subheader("Instance-Level Explanation (LIME)")
-            
-            instance_idx = st.slider("Select instance (row) to explain", 0, len(filtered_df) - 1, 0, key="clf_instance")
-            
-            try:
-                import lime.lime_tabular
-                explainer = lime_tabular.LimeTabularExplainer(
-                    X.values,
-                    feature_names=feature_cols,
-                    class_names=["Fail", "Pass"],
-                    mode="classification",
-                    random_state=42
+            st.subheader("Feature Importance Overview (Precomputed Top-5 LIME)")
+            top5_df = load_lime_top5()
+
+            if top5_df.empty:
+                st.warning("No precomputed top-5 LIME file found at `data/lime_top5_per_model.csv`. Run `compute_lime_top5.py`.")
+            else:
+                model_comp = (
+                    top5_df.groupby("model", as_index=False)["importance"].sum().sort_values("importance", ascending=False)
                 )
-                
-                is_prob_col = "prob" in selected_clf_model_col.lower()
-                if is_prob_col:
-                    pred_fn = lambda x: np.column_stack([1 - clf.predict_proba(x)[:, 1], clf.predict_proba(x)[:, 1]])
-                else:
-                    pred_fn = lambda x: np.column_stack([1 - clf.predict_proba(x)[:, 1], clf.predict_proba(x)[:, 1]])
-                
-                exp = explainer.explain_instance(X.iloc[instance_idx].values, pred_fn, num_features=10)
-                
-                lime_exp_data = []
-                for feature, weight in exp.as_list():
-                    lime_exp_data.append({"Feature": feature, "Weight": weight})
-                
-                lime_df = pd.DataFrame(lime_exp_data)
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.write(f"**Instance #{instance_idx}**")
-                    st.write(f"- District: {filtered_df.iloc[instance_idx]['District']}")
-                    st.write(f"- Grade: {filtered_df.iloc[instance_idx]['Tested Grade']}")
-                    actual_label = "Pass" if filtered_df.iloc[instance_idx]['y_true_binary'] == 1 else "Fail"
-                    st.write(f"- Actual: {actual_label}")
-                    pred_label = "Pass" if filtered_df.iloc[instance_idx][selected_clf_model_col] >= 0.5 else "Fail"
-                    st.write(f"- Predicted: {pred_label}")
-                
-                with col2:
-                    st.write("**Top Features Contributing to Prediction**")
-                    fig, ax = plt.subplots(figsize=(4, 2.5))
-                    colors = ['green' if w > 0 else 'red' for w in lime_df["Weight"]]
-                    ax.barh(lime_df["Feature"], lime_df["Weight"], color=colors, alpha=0.7)
-                    ax.set_xlabel("Contribution")
-                    ax.set_title(f"LIME Explanation (Instance {instance_idx})")
-                    st.pyplot(fig)
-            except Exception as e:
-                st.error(f"Error generating LIME explanation: {str(e)}")
+                fig_model_comp = px.bar(model_comp, x="model", y="importance", color="model")
+                fig_model_comp.update_layout(showlegend=False, height=300, xaxis_title="Model", yaxis_title="Sum of Top-5 Importances")
+                st.plotly_chart(fig_model_comp, use_container_width=True)
+
+                st.write("**Top 5 Features Per Model**")
+                models = top5_df["model"].unique().tolist()
+                cols = st.columns(len(models))
+                for i, m in enumerate(models):
+                    with cols[i]:
+                        st.markdown(f"**{m}**")
+                        top5 = top5_df[top5_df["model"] == m].sort_values("importance", ascending=True)
+                        bar = px.bar(top5, x="importance", y="feature", orientation="h", color="importance", color_continuous_scale="Viridis")
+                        bar.update_layout(height=230, showlegend=False, margin=dict(l=10, r=10, t=20, b=10))
+                        st.plotly_chart(bar, use_container_width=True)
+
+                st.write("**Full Top-5 Table**")
+                st.dataframe(top5_df.sort_values(["model", "importance"], ascending=[True, False]))
 
 
 # ============= TAB 6: ANOMALY DETECTION =============
