@@ -79,7 +79,7 @@ st.sidebar.header("Dashboard Filters & Navigation")
 
 tab_choice = st.sidebar.radio(
     "Select View",
-    ["Overview & Model Comparison", "Regression Deep-Dive", "Classification Deep-Dive", "Trend Analysis", "Explainability (SHAP/LIME)", "Anomaly Detection", "Testing Tab"],
+    ["Overview & Model Comparison", "Regression Deep-Dive", "Classification Deep-Dive", "Trend Analysis", "Explainability (Lime)", "Anomaly Detection", "Testing Tab"],
 )
 
 # Filters
@@ -201,8 +201,8 @@ if tab_choice == "Overview & Model Comparison":
                 st.info(f"No districts with non-zero Std Dev available; {filtered_out} districts were excluded from charts.")
             top_districts = district_stats.head(10).reset_index().sort_values("Avg Score")
         else:
-            if filtered_out > 0:
-                st.info(f"Dropped {filtered_out} districts with 0 or missing Std Dev from charts.")
+            #if filtered_out > 0:
+                #st.info(f"Dropped {filtered_out} districts with 0 or missing Std Dev from charts.")
             top_districts = display_stats.head(10).reset_index().sort_values("Avg Score")
         top_chart = px.bar(top_districts, x="Avg Score", y="District", orientation="h", 
                           color="Avg Score", color_continuous_scale="Greens",
@@ -214,9 +214,9 @@ if tab_choice == "Overview & Model Comparison":
     with col2:
         st.write("**Bottom 10 Lowest-Performing Districts**")
         if display_stats.empty:
-            bottom_districts = district_stats.tail(10).reset_index().sort_values("Avg Score")
+            bottom_districts = district_stats.tail(10).reset_index()
         else:
-            bottom_districts = display_stats.tail(10).reset_index().sort_values("Avg Score")
+            bottom_districts = display_stats.tail(10).reset_index()
         bottom_chart = px.bar(bottom_districts, x="Avg Score", y="District", orientation="h",
                              color="Avg Score", color_continuous_scale="Reds",
                              labels={"Avg Score": "Average Score", "District": ""})
@@ -397,7 +397,7 @@ elif tab_choice == "Classification Deep-Dive":
     perf_fig.update_layout(height=400, coloraxis_colorbar=dict(thickness=20))
     st.plotly_chart(perf_fig, use_container_width=True)
     
-    st.dataframe(perf_by_group)
+    #st.dataframe(perf_by_group)
 
 
 # ============= TAB 4: TREND ANALYSIS =============
@@ -436,7 +436,8 @@ elif tab_choice == "Trend Analysis":
     scatter_fig = px.scatter(scatter_data, x="GAM", y="GBR", opacity=0.6, trendline="ols")
     scatter_fig.add_shape(type="line", x0=gam_pred.min(), y0=gam_pred.min(), 
                          x1=gam_pred.max(), y1=gam_pred.max(), line=dict(color="red", dash="dash"))
-    scatter_fig.update_layout(height=400, width=500)
+    scatter_fig.update_layout(height=500, width=500)
+    
     st.plotly_chart(scatter_fig, use_container_width=True)
     
     # Classification agreement heatmap
@@ -507,8 +508,8 @@ elif tab_choice == "Trend Analysis":
 
 
 # ============= TAB 5: EXPLAINABILITY (SHAP & LIME) =============
-elif tab_choice == "Explainability (SHAP/LIME)":
-    st.header("Model Explainability with SHAP & LIME")
+elif tab_choice == "Explainability (Lime)":
+    st.header("Model Explainability LIME")
     
     st.write("""
     Understand **why** models make specific predictions. Use LIME for local instance-level explanations.
@@ -550,17 +551,23 @@ elif tab_choice == "Explainability (SHAP/LIME)":
 
                 st.write("**Top 5 Features Per Model**")
                 models = top5_df["model"].unique().tolist()
-                cols = st.columns(len(models))
-                for i, m in enumerate(models):
-                    with cols[i]:
-                        st.markdown(f"**{m}**")
-                        top5 = top5_df[top5_df["model"] == m].sort_values("importance", ascending=True)
-                        bar = px.bar(top5, x="importance", y="feature", orientation="h", color="importance", color_continuous_scale="Viridis")
-                        bar.update_layout(height=230, showlegend=False, margin=dict(l=10, r=10, t=20, b=10))
-                        st.plotly_chart(bar, use_container_width=True)
+                # Render models in rows of up to 3 columns to improve label wrapping
+                for row_start in range(0, len(models), 3):
+                    row_models = models[row_start: row_start + 3]
+                    cols = st.columns(len(row_models))
+                    for col_idx, m in enumerate(row_models):
+                        with cols[col_idx]:
+                            st.markdown(f"**{m}**")
+                            top5 = top5_df[top5_df["model"] == m].sort_values("importance", ascending=True)
+                            bar = px.bar(top5, x="importance", y="feature", orientation="h", color="importance", color_continuous_scale="Viridis")
+                            bar.update_layout(height=280, showlegend=False, margin=dict(l=20, r=10, t=20, b=10))
+                            st.plotly_chart(bar, use_container_width=True)
 
-                st.write("**Full Top-5 Table**")
-                st.dataframe(top5_df.sort_values(["model", "importance"], ascending=[True, False]))
+                # Allow user to pick a model to view its top-5 features (avoid showing all models at once)
+                selected_top5_model = st.selectbox("Choose model to view top-5 features", models, key="top5_choice_reg")
+                sel_df = top5_df[top5_df["model"] == selected_top5_model].sort_values("importance", ascending=False)
+                st.write(f"**Top-5 LIME features for {selected_top5_model}**")
+                st.dataframe(sel_df)
     
     else:  # Classification
         clf_model_options = {**CLASSIFICATION_MODELS, **PROB_MODELS}
@@ -594,17 +601,23 @@ elif tab_choice == "Explainability (SHAP/LIME)":
 
                 st.write("**Top 5 Features Per Model**")
                 models = top5_df["model"].unique().tolist()
-                cols = st.columns(len(models))
-                for i, m in enumerate(models):
-                    with cols[i]:
-                        st.markdown(f"**{m}**")
-                        top5 = top5_df[top5_df["model"] == m].sort_values("importance", ascending=True)
-                        bar = px.bar(top5, x="importance", y="feature", orientation="h", color="importance", color_continuous_scale="Viridis")
-                        bar.update_layout(height=230, showlegend=False, margin=dict(l=10, r=10, t=20, b=10))
-                        st.plotly_chart(bar, use_container_width=True)
+                # Render models in rows of up to 3 columns to improve label wrapping
+                for row_start in range(0, len(models), 3):
+                    row_models = models[row_start: row_start + 3]
+                    cols = st.columns(len(row_models))
+                    for col_idx, m in enumerate(row_models):
+                        with cols[col_idx]:
+                            st.markdown(f"**{m}**")
+                            top5 = top5_df[top5_df["model"] == m].sort_values("importance", ascending=True)
+                            bar = px.bar(top5, x="importance", y="feature", orientation="h", color="importance", color_continuous_scale="Viridis")
+                            bar.update_layout(height=280, showlegend=False, margin=dict(l=20, r=10, t=20, b=10))
+                            st.plotly_chart(bar, use_container_width=True)
 
-                st.write("**Full Top-5 Table**")
-                st.dataframe(top5_df.sort_values(["model", "importance"], ascending=[True, False]))
+                # Allow user to pick a model to view its top-5 features (avoid showing all models at once)
+                selected_top5_model = st.selectbox("Choose model to view top-5 features", models, key="top5_choice_clf")
+                sel_df = top5_df[top5_df["model"] == selected_top5_model].sort_values("importance", ascending=False)
+                st.write(f"**Top-5 LIME features for {selected_top5_model}**")
+                st.dataframe(sel_df)
 
 
 # ============= TAB 6: ANOMALY DETECTION =============
