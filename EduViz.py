@@ -2,17 +2,15 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score, confusion_matrix,
     mean_squared_error, mean_absolute_error, r2_score, roc_auc_score, roc_curve
 )
 from sklearn.ensemble import IsolationForest
-import lime, shap
+import lime
 from lime import lime_tabular
 from lime.lime_tabular import LimeTabularExplainer
 import warnings
-import seaborn as sns
 import plotly.express as px
 warnings.filterwarnings('ignore')
 
@@ -171,6 +169,75 @@ if tab_choice == "Overview & Model Comparison":
     - **Best Classification Model (by F1):** {best_clf} ({clf_df.loc[best_clf, "F1"]:.3f})
     - **Data filtered to:** {len(filtered_df)} districts/grades
     """)
+
+    # Geographic Performance Disparities
+    st.subheader("📍 Geographic Performance Disparities")
+    st.write("Examine performance variation across Texas school districts.")
+    
+    district_stats = filtered_df.groupby("District").agg({
+        "y_true_cont": ["mean", "std"],
+        "y_true_binary": "mean"
+    }).round(2)
+    district_stats.columns = ["Avg Score", "Std Dev", "Pass Rate"]
+    district_stats["Pass Rate"] = (district_stats["Pass Rate"] * 100).round(1)
+    district_stats = district_stats.sort_values("Avg Score", ascending=False)
+
+    # Prepare display copy that excludes districts with 0 or missing Std Dev
+    display_stats = district_stats.copy()
+    display_stats["Std Dev"] = pd.to_numeric(display_stats["Std Dev"], errors="coerce")
+    filtered_out = display_stats[(display_stats["Std Dev"].isna()) | (display_stats["Std Dev"] == 0)].shape[0]
+    display_stats = display_stats[~(display_stats["Std Dev"].isna()) & (display_stats["Std Dev"] != 0)]
+    # convert Pass Rate to formatted string for display (do this after filtering)
+    district_stats["Pass Rate"] = district_stats["Pass Rate"].astype(str)+ "%"
+    display_stats["Pass Rate"] = display_stats["Pass Rate"].astype(str)+ "%"
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write("**Top 10 Highest-Performing Districts**")
+        # prefer display_stats (filtered) for charts; fall back to full stats if empty
+        if display_stats.empty:
+            if filtered_out > 0:
+                st.info(f"No districts with non-zero Std Dev available; {filtered_out} districts were excluded from charts.")
+            top_districts = district_stats.head(10).reset_index().sort_values("Avg Score")
+        else:
+            if filtered_out > 0:
+                st.info(f"Dropped {filtered_out} districts with 0 or missing Std Dev from charts.")
+            top_districts = display_stats.head(10).reset_index().sort_values("Avg Score")
+        top_chart = px.bar(top_districts, x="Avg Score", y="District", orientation="h", 
+                          color="Avg Score", color_continuous_scale="Greens",
+                          labels={"Avg Score": "Average Score", "District": ""})
+        top_chart.update_layout(height=350, showlegend=False, xaxis=dict(range=[0, 100]))
+        st.plotly_chart(top_chart, use_container_width=True)
+        st.dataframe(top_districts.set_index('District')[['Avg Score','Std Dev','Pass Rate']], use_container_width=True)
+    
+    with col2:
+        st.write("**Bottom 10 Lowest-Performing Districts**")
+        if display_stats.empty:
+            bottom_districts = district_stats.tail(10).reset_index().sort_values("Avg Score")
+        else:
+            bottom_districts = display_stats.tail(10).reset_index().sort_values("Avg Score")
+        bottom_chart = px.bar(bottom_districts, x="Avg Score", y="District", orientation="h",
+                             color="Avg Score", color_continuous_scale="Reds",
+                             labels={"Avg Score": "Average Score", "District": ""})
+        bottom_chart.update_layout(height=350, showlegend=False, xaxis=dict(range=[0, 100]))
+        st.plotly_chart(bottom_chart, use_container_width=True)
+        st.dataframe(bottom_districts.set_index('District')[['Avg Score','Std Dev','Pass Rate']], use_container_width=True)
+    
+    st.write("**Key Observations:**")
+    obs_stats = display_stats if not display_stats.empty else district_stats
+    if not obs_stats.empty:
+        obs_sorted = obs_stats.sort_values("Avg Score", ascending=False)
+        top_avg = obs_sorted.iloc[0]["Avg Score"]
+        bottom_avg = obs_sorted.iloc[-1]["Avg Score"]
+        gap = top_avg - bottom_avg
+        st.write(f"- **Performance Gap:** {gap:.1f} points between top and bottom performers")
+        st.write(f"- **Range:** {bottom_avg:.1f} to {top_avg:.1f}")
+        st.write(f"- **Total Districts Analyzed (used in charts):** {len(obs_stats)}")
+        if filtered_out > 0:
+            st.write(f"- **Note:** {filtered_out} districts were excluded from charts because Std Dev was 0 or missing.")
+    else:
+        st.write("No district statistics available to compute key observations after filtering.")
 
 
 # ============= TAB 2: REGRESSION DEEP-DIVE =============
