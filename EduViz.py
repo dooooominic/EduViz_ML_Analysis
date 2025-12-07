@@ -79,7 +79,7 @@ st.sidebar.header("Dashboard Filters & Navigation")
 
 tab_choice = st.sidebar.radio(
     "Select View",
-    ["Overview & Model Comparison", "Regression Deep-Dive", "Classification Deep-Dive", "Trend Analysis", "Explainability (Lime)", "Anomaly Detection", "Testing Tab"],
+    ["Overview & Model Comparison", "Regression Deep-Dive", "Classification Deep-Dive", "Trend Analysis", "Explainability (Lime)"],
 )
 
 # Filters
@@ -133,31 +133,28 @@ if tab_choice == "Overview & Model Comparison":
         prec = precision_score(y_true, y_pred, zero_division=0)
         rec = recall_score(y_true, y_pred, zero_division=0)
         f1 = f1_score(y_true, y_pred, zero_division=0)
-        try:
-            auc = roc_auc_score(y_true, y_prob)
-        except:
-            auc = np.nan
-        clf_metrics[label] = {"Accuracy": acc, "Precision": prec, "Recall": rec, "F1": f1, "AUC": auc}
+    
+        clf_metrics[label] = {"Accuracy": acc, "Precision": prec, "Recall": rec, "F1": f1}
     
     col1, col2 = st.columns(2)
     
     with col1:
         st.subheader("Regression Models")
         reg_df = pd.DataFrame(reg_metrics).T
-        st.dataframe(reg_df.style.highlight_max(axis=0, color='lightgreen').highlight_min(axis=0, color='lightcoral'))
+        st.dataframe(reg_df.style.highlight_max(axis=0, color='lightgreen').highlight_min(axis=0, color='lightyellow'))
         
     with col2:
         st.subheader("Classification Models")
         clf_df = pd.DataFrame(clf_metrics).T
-        st.dataframe(clf_df.style.highlight_max(axis=0, color='lightgreen').highlight_min(axis=0, color='lightcoral'))
+        st.dataframe(clf_df.style.highlight_max(axis=0, color='lightgreen').highlight_min(axis=0, color='lightyellow'))
     
     # Heatmap comparison
     st.subheader("Metric Heatmap: Regression Models")
-    fig = px.imshow(reg_df, labels=dict(color="Score"), color_continuous_scale="RdYlGn", aspect="auto", text_auto=".3f")
+    fig = px.imshow(reg_df, labels=dict(color="Score"), color_continuous_scale="YlGn", aspect="auto", text_auto=".3f")
     st.plotly_chart(fig, use_container_width=True)
     
     st.subheader("Metric Heatmap: Classification Models")
-    fig = px.imshow(clf_df, labels=dict(color="Score"), color_continuous_scale="RdYlGn", aspect="auto", text_auto=".3f")
+    fig = px.imshow(clf_df, labels=dict(color="Score"), color_continuous_scale="YlGn", aspect="auto", text_auto=".3f")
     st.plotly_chart(fig, use_container_width=True)
     
     # Insights
@@ -537,37 +534,67 @@ elif tab_choice == "Explainability (Lime)":
             
             st.subheader("Feature Importance Overview (Precomputed Top-5 LIME)")
             top5_df = load_lime_top5()
-
+            
             if top5_df.empty:
                 st.warning("No precomputed top-5 LIME file found at `data/lime_top5_per_model.csv`. Run `compute_lime_top5.py`.")
             else:
-                # Show model comparison by sum of top-5 importances
-                model_comp = (
-                    top5_df.groupby("model", as_index=False)["importance"].sum().sort_values("importance", ascending=False)
+                # Allow user to choose how to view importances: per-model or combined local/global
+                view_choice = st.selectbox(
+                    "View top-5 importances:",
+                    ["Per model", "Combined Local (LIME)", "Combined Global (surrogate)"],
+                    key="top5_view_reg",
                 )
-                fig_model_comp = px.bar(model_comp, x="model", y="importance", color="model")
-                fig_model_comp.update_layout(showlegend=False, height=300, xaxis_title="Model", yaxis_title="Sum of Top-5 Importances")
-                st.plotly_chart(fig_model_comp, use_container_width=True)
 
-                st.write("**Top 5 Features Per Model**")
-                models = top5_df["model"].unique().tolist()
-                # Render models in rows of up to 3 columns to improve label wrapping
-                for row_start in range(0, len(models), 3):
-                    row_models = models[row_start: row_start + 3]
-                    cols = st.columns(len(row_models))
-                    for col_idx, m in enumerate(row_models):
-                        with cols[col_idx]:
-                            st.markdown(f"**{m}**")
-                            top5 = top5_df[top5_df["model"] == m].sort_values("importance", ascending=True)
-                            bar = px.bar(top5, x="importance", y="feature", orientation="h", color="importance", color_continuous_scale="Viridis")
-                            bar.update_layout(height=280, showlegend=False, margin=dict(l=20, r=10, t=20, b=10))
-                            st.plotly_chart(bar, use_container_width=True)
+                if view_choice == "Per model":
+                    # Show model comparison by sum of top-5 importances
+                    model_comp = (
+                        top5_df.groupby("model", as_index=False)["importance"].sum().sort_values("importance", ascending=False)
+                    )
+                    fig_model_comp = px.bar(model_comp, x="model", y="importance", color="model")
+                    fig_model_comp.update_layout(showlegend=False, height=300, xaxis_title="Model", yaxis_title="Sum of Top-5 Importances")
+                    st.plotly_chart(fig_model_comp, use_container_width=True)
 
-                # Allow user to pick a model to view its top-5 features (avoid showing all models at once)
-                selected_top5_model = st.selectbox("Choose model to view top-5 features", models, key="top5_choice_reg")
-                sel_df = top5_df[top5_df["model"] == selected_top5_model].sort_values("importance", ascending=False)
-                st.write(f"**Top-5 LIME features for {selected_top5_model}**")
-                st.dataframe(sel_df)
+                    st.write("**Top 5 Features Per Model**")
+                    models = top5_df["model"].unique().tolist()
+                    # Render models in rows of up to 3 columns to improve label wrapping
+                    for row_start in range(0, len(models), 3):
+                        row_models = models[row_start: row_start + 3]
+                        cols = st.columns(len(row_models))
+                        for col_idx, m in enumerate(row_models):
+                            with cols[col_idx]:
+                                st.markdown(f"**{m}**")
+                                top5 = top5_df[top5_df["model"] == m].sort_values("importance", ascending=True)
+                                bar = px.bar(top5, x="importance", y="feature", orientation="h", color="importance", color_continuous_scale="Viridis")
+                                bar.update_layout(height=280, showlegend=False, margin=dict(l=20, r=10, t=20, b=10))
+                                st.plotly_chart(bar, use_container_width=True)
+
+                    # Allow user to pick a model to view its top-5 features (avoid showing all models at once)
+                    selected_top5_model = st.selectbox("Choose model to view top-5 features", models, key="top5_choice_reg")
+                    sel_df = top5_df[top5_df["model"] == selected_top5_model].sort_values("importance", ascending=False)
+                    st.write(f"**Top-5 LIME features for {selected_top5_model}**")
+                    st.dataframe(sel_df)
+                else:
+                    # Combined view: aggregate across either local LIME entries or global surrogate importance entries
+                    if view_choice == "Combined Local (LIME)":
+                        combined_df = top5_df[~top5_df["model"].str.contains("GlobalImportance", na=False)].copy()
+                        title = "Combined Local LIME importances"
+                    else:
+                        combined_df = top5_df[top5_df["model"].str.contains("GlobalImportance", na=False)].copy()
+                        title = "Combined Global (surrogate) importances"
+
+                    if combined_df.empty:
+                        st.warning("No data available for the selected combined view.")
+                    else:
+                        agg = (
+                            combined_df.groupby("feature", as_index=False)["importance"].sum()
+                            .sort_values("importance", ascending=False)
+                            .head(30)
+                        )
+                        st.subheader(title)
+                        agg_chart = px.bar(agg, x="importance", y="feature", orientation="h", color="importance", color_continuous_scale="Viridis")
+                        agg_chart.update_layout(height=500, showlegend=False, margin=dict(l=20, r=10, t=20, b=10))
+                        st.plotly_chart(agg_chart, use_container_width=True)
+                        st.dataframe(agg)
     
     else:  # Classification
         clf_model_options = {**CLASSIFICATION_MODELS, **PROB_MODELS}
@@ -588,161 +615,61 @@ elif tab_choice == "Explainability (Lime)":
             
             st.subheader("Feature Importance Overview (Precomputed Top-5 LIME)")
             top5_df = load_lime_top5()
-
+            
             if top5_df.empty:
                 st.warning("No precomputed top-5 LIME file found at `data/lime_top5_per_model.csv`. Run `compute_lime_top5.py`.")
             else:
-                model_comp = (
-                    top5_df.groupby("model", as_index=False)["importance"].sum().sort_values("importance", ascending=False)
+                view_choice = st.selectbox(
+                    "View top-5 importances:",
+                    ["Per model", "Combined Local (LIME)", "Combined Global (surrogate)"],
+                    key="top5_view_clf",
                 )
-                fig_model_comp = px.bar(model_comp, x="model", y="importance", color="model")
-                fig_model_comp.update_layout(showlegend=False, height=300, xaxis_title="Model", yaxis_title="Sum of Top-5 Importances")
-                st.plotly_chart(fig_model_comp, use_container_width=True)
 
-                st.write("**Top 5 Features Per Model**")
-                models = top5_df["model"].unique().tolist()
-                # Render models in rows of up to 3 columns to improve label wrapping
-                for row_start in range(0, len(models), 3):
-                    row_models = models[row_start: row_start + 3]
-                    cols = st.columns(len(row_models))
-                    for col_idx, m in enumerate(row_models):
-                        with cols[col_idx]:
-                            st.markdown(f"**{m}**")
-                            top5 = top5_df[top5_df["model"] == m].sort_values("importance", ascending=True)
-                            bar = px.bar(top5, x="importance", y="feature", orientation="h", color="importance", color_continuous_scale="Viridis")
-                            bar.update_layout(height=280, showlegend=False, margin=dict(l=20, r=10, t=20, b=10))
-                            st.plotly_chart(bar, use_container_width=True)
+                if view_choice == "Per model":
+                    model_comp = (
+                        top5_df.groupby("model", as_index=False)["importance"].sum().sort_values("importance", ascending=False)
+                    )
+                    fig_model_comp = px.bar(model_comp, x="model", y="importance", color="model")
+                    fig_model_comp.update_layout(showlegend=False, height=300, xaxis_title="Model", yaxis_title="Sum of Top-5 Importances")
+                    st.plotly_chart(fig_model_comp, use_container_width=True)
 
-                # Allow user to pick a model to view its top-5 features (avoid showing all models at once)
-                selected_top5_model = st.selectbox("Choose model to view top-5 features", models, key="top5_choice_clf")
-                sel_df = top5_df[top5_df["model"] == selected_top5_model].sort_values("importance", ascending=False)
-                st.write(f"**Top-5 LIME features for {selected_top5_model}**")
-                st.dataframe(sel_df)
+                    st.write("**Top 5 Features Per Model**")
+                    models = top5_df["model"].unique().tolist()
+                    # Render models in rows of up to 3 columns to improve label wrapping
+                    for row_start in range(0, len(models), 3):
+                        row_models = models[row_start: row_start + 3]
+                        cols = st.columns(len(row_models))
+                        for col_idx, m in enumerate(row_models):
+                            with cols[col_idx]:
+                                st.markdown(f"**{m}**")
+                                top5 = top5_df[top5_df["model"] == m].sort_values("importance", ascending=True)
+                                bar = px.bar(top5, x="importance", y="feature", orientation="h", color="importance", color_continuous_scale="Viridis")
+                                bar.update_layout(height=280, showlegend=False, margin=dict(l=20, r=10, t=20, b=10))
+                                st.plotly_chart(bar, use_container_width=True)
 
+                    # Allow user to pick a model to view its top-5 features (avoid showing all models at once)
+                    selected_top5_model = st.selectbox("Choose model to view top-5 features", models, key="top5_choice_clf")
+                    sel_df = top5_df[top5_df["model"] == selected_top5_model].sort_values("importance", ascending=False)
+                    st.write(f"**Top-5 LIME features for {selected_top5_model}**")
+                    st.dataframe(sel_df)
+                else:
+                    if view_choice == "Combined Local (LIME)":
+                        combined_df = top5_df[~top5_df["model"].str.contains("GlobalImportance", na=False)].copy()
+                        title = "Combined Local LIME importances"
+                    else:
+                        combined_df = top5_df[top5_df["model"].str.contains("GlobalImportance", na=False)].copy()
+                        title = "Combined Global (surrogate) importances"
 
-# ============= TAB 6: ANOMALY DETECTION =============
-elif tab_choice == "Anomaly Detection":
-    st.header("Anomaly Detection & Outlier Analysis")
-    
-    st.write("""
-    Identify unusual districts, grades, or predictions that deviate from expected patterns.
-    Uses Isolation Forest for unsupervised anomaly detection on prediction errors and input features.
-    """)
-    
-    # Prepare features for anomaly detection
-    feature_cols = [c for c in filtered_df.columns if c not in ["District", "Year", "y_true_binary", "y_true_cont", 
-                                                                   "logreg_pred", "logreg_prob", "dt_pred", "mlp_pred", 
-                                                                   "gam_pred", "gbr_pred"]]
-    
-    if len(feature_cols) > 0:
-        X = filtered_df[feature_cols].fillna(0)
-    else:
-        # If no explicit features, use prediction residuals
-        X = pd.DataFrame({
-            "gam_residual": filtered_df["gam_pred"] - filtered_df["y_true_cont"],
-            "gbr_residual": filtered_df["gbr_pred"] - filtered_df["y_true_cont"],
-        })
-    
-    # Train Isolation Forest
-    iso_forest = IsolationForest(contamination=0.1, random_state=42)
-    anomaly_scores = iso_forest.fit_predict(X)
-    anomaly_probs = -iso_forest.score_samples(X)  # Negative scores = anomaly probability
-    
-    filtered_df_with_anomalies = filtered_df.copy()
-    filtered_df_with_anomalies["anomaly"] = anomaly_scores
-    filtered_df_with_anomalies["anomaly_score"] = anomaly_probs
-    
-    n_anomalies = (anomaly_scores == -1).sum()
-    
-    st.subheader(f"📊 Anomaly Summary")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Anomalies Detected", n_anomalies, f"{n_anomalies / len(filtered_df) * 100:.1f}%")
-    col2.metric("Normal Instances", (anomaly_scores == 1).sum())
-    col3.metric("Avg Anomaly Score", f"{anomaly_probs.mean():.3f}")
-    
-    # Visualize anomaly scores
-    st.subheader("Anomaly Score Distribution")
-    anom_data = pd.DataFrame({
-        "Score": anomaly_probs,
-        "Type": ["Normal" if s == 1 else "Anomaly" for s in anomaly_scores]
-    })
-    
-    anom_fig = px.histogram(anom_data, x="Score", color="Type", nbins=30, barmode="overlay",
-                           color_discrete_map={"Normal": "blue", "Anomaly": "red"})
-    anom_fig.update_layout(height=350, hovermode="x unified")
-    st.plotly_chart(anom_fig, use_container_width=True)
-    
-    # Show anomalies
-    st.subheader("Detected Anomalies")
-    
-    anomalies_df = filtered_df_with_anomalies[filtered_df_with_anomalies["anomaly"] == -1][
-        ["District", "Tested Grade", "y_true_cont", "gam_pred", "gbr_pred", "y_true_binary", "logreg_pred", "anomaly_score"]
-    ].sort_values("anomaly_score", ascending=False).head(20)
-    
-    if len(anomalies_df) > 0:
-        st.dataframe(anomalies_df)
-        
-        st.write("**Interpretation:** Instances with high anomaly scores are unusual and warrant investigation.")
-    else:
-        st.info("No anomalies detected with current settings.")
-    
-    # Anomalies by district
-    st.subheader("Anomaly Concentration by District")
-    
-    district_anomalies = filtered_df_with_anomalies.groupby("District").agg({
-        "anomaly": lambda x: (x == -1).sum(),
-    }).rename(columns={"anomaly": "anomaly_count"})
-    
-    district_anomalies["total"] = filtered_df_with_anomalies.groupby("District").size()
-    district_anomalies["anomaly_pct"] = (district_anomalies["anomaly_count"] / district_anomalies["total"] * 100).round(1)
-    district_anomalies = district_anomalies.sort_values("anomaly_count", ascending=False)
-    
-    dist_fig = px.bar(district_anomalies.head(15).reset_index(), x="anomaly_count", y="District", orientation="h",
-                     color="anomaly_count", color_continuous_scale="Reds")
-    dist_fig.update_layout(height=400, xaxis_title="Number of Anomalies", showlegend=False)
-    st.plotly_chart(dist_fig, use_container_width=True)
-    
-    st.dataframe(district_anomalies.head(20))
-    
-    # Anomalies by grade
-    st.subheader("Anomaly Concentration by Grade")
-    
-    grade_anomalies = filtered_df_with_anomalies.groupby("Tested Grade").agg({
-        "anomaly": lambda x: (x == -1).sum(),
-    }).rename(columns={"anomaly": "anomaly_count"})
-    
-    grade_anomalies["total"] = filtered_df_with_anomalies.groupby("Tested Grade").size()
-    grade_anomalies["anomaly_pct"] = (grade_anomalies["anomaly_count"] / grade_anomalies["total"] * 100).round(1)
-    
-    grade_fig = px.bar(grade_anomalies.reset_index(), x="Tested Grade", y="anomaly_count", color="anomaly_count",
-                      color_continuous_scale="Oranges", labels={"anomaly_count": "Number of Anomalies"})
-    grade_fig.update_layout(height=350, showlegend=False)
-    st.plotly_chart(grade_fig, use_container_width=True)
-    
-    st.dataframe(grade_anomalies)
-    
-    # Feature-level anomaly analysis
-    st.subheader("🔍 Feature-Level Anomaly Insights")
-    
-    st.write("For anomalies detected, which features are most unusual?")
-    
-    if len(feature_cols) > 0 and len(anomalies_df) > 0:
-        anomaly_indices = filtered_df_with_anomalies[filtered_df_with_anomalies["anomaly"] == -1].index
-        
-        feature_stats = pd.DataFrame({
-            "Normal_Mean": X.iloc[anomaly_scores == 1].mean(),
-            "Normal_Std": X.iloc[anomaly_scores == 1].std(),
-            "Anomaly_Mean": X.iloc[anomaly_scores == -1].mean(),
-        })
-        
-        feature_stats["Deviation"] = np.abs(feature_stats["Anomaly_Mean"] - feature_stats["Normal_Mean"]) / (feature_stats["Normal_Std"] + 1e-6)
-        feature_stats = feature_stats.sort_values("Deviation", ascending=False)
-        
-        feat_fig = px.bar(feature_stats.head(10).reset_index(), x="Deviation", y="index", orientation="h",
-                         color="Deviation", color_continuous_scale="Purples", labels={"index": "Feature"})
-        feat_fig.update_layout(height=400, showlegend=False)
-        st.plotly_chart(feat_fig, use_container_width=True)
-        
-        st.dataframe(feature_stats)
-elif tab_choice == "Testing Tab":
-    st.header("This is a testing tab.")
+                    if combined_df.empty:
+                        st.warning("No data available for the selected combined view.")
+                    else:
+                        agg = (
+                            combined_df.groupby("feature", as_index=False)["importance"].sum()
+                            .sort_values("importance", ascending=False)
+                            .head(30)
+                        )
+                        st.subheader(title)
+                        agg_chart = px.bar(agg, x="importance", y="feature", orientation="h", color="importance", color_continuous_scale="Viridis")
+                        agg_chart.update_layout(height=500, showlegend=False, margin=dict(l=20, r=10, t=20, b=10))
+                        st.plotly_chart(agg_chart, use_container_width=True)
+                        st.dataframe(agg)
