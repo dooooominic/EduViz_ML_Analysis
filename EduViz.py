@@ -374,7 +374,7 @@ elif tab_choice == "Classification Deep-Dive":
                          labels={"FPR": "False Positive Rate", "TPR": "True Positive Rate"},
                          title=f"ROC Curve (AUC={auc_score:.3f})")
         roc_fig.add_shape(type="line", x0=0, y0=0, x1=1, y1=1, line=dict(color="gray", dash="dash"))
-        roc_fig.update_layout(height=350, width=350)
+        roc_fig.update_layout(height=500, width=250)
         st.plotly_chart(roc_fig, use_container_width=True)
     
     # Error by group
