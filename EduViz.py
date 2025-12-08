@@ -141,20 +141,21 @@ if tab_choice == "Overview & Model Comparison":
     with col1:
         st.subheader("Regression Models")
         reg_df = pd.DataFrame(reg_metrics).T
-        st.dataframe(reg_df.style.highlight_max(axis=0, color='lightgreen').highlight_min(axis=0, color='lightyellow'))
+        st.dataframe(reg_df.style.highlight_max(axis=0, color='lightyellow').highlight_min(axis=0, color='lightgreen'))
         
     with col2:
         st.subheader("Classification Models")
         clf_df = pd.DataFrame(clf_metrics).T
+        clf_df = clf_df.head(3)
         st.dataframe(clf_df.style.highlight_max(axis=0, color='lightgreen').highlight_min(axis=0, color='lightyellow'))
     
     # Heatmap comparison
     st.subheader("Metric Heatmap: Regression Models")
-    fig = px.imshow(reg_df, labels=dict(color="Score"), color_continuous_scale="YlGn", aspect="auto", text_auto=".3f")
+    fig = px.imshow(reg_df, labels=dict(color="Score"), color_continuous_scale="YlOrRd", aspect="auto", text_auto=".3f")
     st.plotly_chart(fig, use_container_width=True)
     
     st.subheader("Metric Heatmap: Classification Models")
-    fig = px.imshow(clf_df, labels=dict(color="Score"), color_continuous_scale="YlGn", aspect="auto", text_auto=".3f")
+    fig = px.imshow(clf_df[:3], labels=dict(color="Score"), color_continuous_scale="YlGn", aspect="auto", text_auto=".3f")
     st.plotly_chart(fig, use_container_width=True)
     
     # Insights
@@ -215,7 +216,7 @@ if tab_choice == "Overview & Model Comparison":
         else:
             bottom_districts = display_stats.tail(10).reset_index()
         bottom_chart = px.bar(bottom_districts, x="Avg Score", y="District", orientation="h",
-                             color="Avg Score", color_continuous_scale="Reds",
+                             color="Avg Score", color_continuous_scale="Reds_r",
                              labels={"Avg Score": "Average Score", "District": ""})
         bottom_chart.update_layout(height=350, showlegend=False, xaxis=dict(range=[0, 100]))
         st.plotly_chart(bottom_chart, use_container_width=True)
