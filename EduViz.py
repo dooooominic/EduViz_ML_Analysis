@@ -342,7 +342,7 @@ elif tab_choice == "Classification Deep-Dive":
     with col1:
         st.subheader("Confusion Matrix")
         cm = confusion_matrix(y_true, y_pred)
-        cm_df = pd.DataFrame(cm, index=["Fail", "Pass"], columns=["Fail", "Pass"])
+        cm_df = pd.DataFrame(cm, index=["Actual Fail", "Actual Pass"], columns=["Predicted Fail", "Predicted Pass"])
         heatmap_fig = px.imshow(cm_df, labels=dict(color="Count"), text_auto=True, color_continuous_scale="Blues", aspect="auto")
         heatmap_fig.update_layout(height=300, width=300)
         st.plotly_chart(heatmap_fig, use_container_width=True)
