@@ -3,6 +3,7 @@
 This is my final project for my Visualization for Machine Learning course at NYU Tandon School of Engineering, Fall 2025. I wanted to work with education data, of course, and I am using this project to practice all that I have learned from 0 CS knowledge this past summer to now, by cleaning up data, applying different machine learning concepts, training different classification and regression models I have learned, and creating visualizations in Streamlit in the form of a data dashboard. There is still a lot more to learn, but this is what I have so far! 
 
 **Overview**
+
 EduViz is an interactive data visualization and machine learning dashboard designed to explore district-level education trends in Texas using statewide assessment data from 2022–2025. The project combines predictive modeling, interpretable ML techniques, and interactive visualizations to help educators, researchers, and policymakers better understand patterns in academic performance and equity over time.
 
 This project was developed as part of a visualization and machine learning research workflow and emphasizes transparency, interpretability, and real-world policy relevance.
@@ -15,15 +16,22 @@ EduViz was built with three core goals in mind:
 Rather than focusing solely on predictive accuracy, EduViz prioritizes understanding why models behave the way they do and how different educational indicators relate to outcomes.
 
 **Tech Stack**
+
 	•	Python (pandas, numpy, scikit-learn, keras)
+	
 	•	Machine Learning: Logistic Regression, Random Forest, GAMs, Gradient Boosting Regressor, interpretable models
+	
 	•	Explainability: LIME
+	
 	•	Visualization: Plotly, Matplotlib
+	
 	•	Dashboard: Streamlit
 
+**Project Structure**
 
+```
 EduViz/
-├── __pycache__/                     # Cached Python bytecode (auto-generated)
+├── __pycache__                     # Cached Python bytecode (auto-generated) 
 ├── analysis_outputs/                # Saved figures, model results, and evaluation outputs to enhance Streamlit performance
 ├── data/                            # Processed district-level education datasets
 ├── scripts/                         # Helper scripts for preprocessing, modeling, and analysis
@@ -33,5 +41,6 @@ EduViz/
 ├── VizML Final Project Presentation.pdf  # Slide deck for project presentation
 ├── requirements.txt                 # Python dependencies
 └── README.md
+```
 
   run in terminal: streamlit run eduviz.py
