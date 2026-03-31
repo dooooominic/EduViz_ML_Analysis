@@ -17,6 +17,7 @@ Rather than focusing solely on predictive accuracy, EduViz prioritizes understan
 
 <img width="2812" height="968" alt="image" src="https://github.com/user-attachments/assets/5db171ab-dd60-48e2-9cd8-4925a8db5980" />
 
+<img width="2228" height="1048" alt="image" src="https://github.com/user-attachments/assets/f2a5da3a-4630-4fa1-a4a8-0b07258a3ac7" />
 
 **Tech Stack**
 
