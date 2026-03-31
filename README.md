@@ -15,6 +15,9 @@ EduViz was built with three core goals in mind:
 
 Rather than focusing solely on predictive accuracy, EduViz prioritizes understanding why models behave the way they do and how different educational indicators relate to outcomes.
 
+<img width="2812" height="968" alt="image" src="https://github.com/user-attachments/assets/5db171ab-dd60-48e2-9cd8-4925a8db5980" />
+
+
 **Tech Stack**
 
 	•	Python (pandas, numpy, scikit-learn, keras)
