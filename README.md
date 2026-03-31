@@ -15,9 +15,10 @@ EduViz was built with three core goals in mind:
 
 Rather than focusing solely on predictive accuracy, EduViz prioritizes understanding why models behave the way they do and how different educational indicators relate to outcomes.
 
-<img width="2812" height="968" alt="image" src="https://github.com/user-attachments/assets/5db171ab-dd60-48e2-9cd8-4925a8db5980" />
+<img width="1406" height="484" alt="image" src="https://github.com/user-attachments/assets/5db171ab-dd60-48e2-9cd8-4925a8db5980" />
 
-<img width="2228" height="1048" alt="image" src="https://github.com/user-attachments/assets/f2a5da3a-4630-4fa1-a4a8-0b07258a3ac7" />
+<img width="1114" height="528" alt="image" src="https://github.com/user-attachments/assets/f2a5da3a-4630-4fa1-a4a8-0b07258a3ac7" />
+<img width="1104" height="529" alt="image" src="https://github.com/user-attachments/assets/1db26ccc-f230-49aa-a968-f26e31e5b373" />
 
 **Tech Stack**
 
